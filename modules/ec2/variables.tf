@@ -31,3 +31,8 @@ variable "user_data_file" {
 variable "sg_id" {
   type = string
 }
+
+variable "master_ip" {
+  type    = string
+  default = ""
+}

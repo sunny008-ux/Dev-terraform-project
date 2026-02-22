@@ -87,7 +87,7 @@ module "ec2_instance_2" {
   vpc_id    = module.vpc.vpc_id
   sg_id   = aws_security_group.sg.id
 
-  user_data_file = "../../modules/ec2/scripts/worker.sh"
+  user_data_file = "../../modules/ec2/scripts/worker.sh.tpl"
 }
 
 module "ec2_instance_3" {
@@ -102,6 +102,6 @@ module "ec2_instance_3" {
   vpc_id    = module.vpc.vpc_id
   sg_id   = aws_security_group.sg.id
 
-  user_data_file = "../../modules/ec2/scripts/worker.sh"
+  user_data_file = "../../modules/ec2/scripts/worker.sh.tpl"
 }
 
