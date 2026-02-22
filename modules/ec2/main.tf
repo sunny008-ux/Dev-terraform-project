@@ -6,12 +6,12 @@ resource "aws_instance" "ec2" {
   key_name               = var.key_name
 
   user_data = var.user_data_file != "" ? (
-  var.master_ip != "" ?
-  templatefile(var.user_data_file, {
-    master_ip = var.master_ip
-  }) :
-  file(var.user_data_file)
-) : null
+    var.master_ip != "" ?
+    templatefile(var.user_data_file, {
+      master_ip = var.master_ip
+    }) :
+    file(var.user_data_file)
+  ) : null
 
   root_block_device {
     volume_size = 20      # GB
