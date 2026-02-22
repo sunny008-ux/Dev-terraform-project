@@ -1,0 +1,42 @@
+---
+- name: Install ArgoCD using Helm
+  hosts: k8s_master
+  become: false
+
+  tasks:
+
+    - name: Install Helm
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Add ArgoCD Helm Repo
+      shell: |
+        helm repo add argo https://argoproj.github.io/argo-helm
+        helm repo update
+
+    - name: Create argocd namespace
+      shell: kubectl create namespace argocd
+      ignore_errors: yes
+
+    - name: Install ArgoCD via Helm
+      shell: |
+        helm upgrade --install argocd argo/argo-cd \
+          --namespace argocd \
+          --set server.service.type=NodePort
+
+    - name: Wait for ArgoCD server
+      shell: kubectl rollout status deployment argocd-server -n argocd
+      register: rollout_status
+      retries: 10
+      delay: 30
+      until: rollout_status.rc == 0
+
+    - name: Get ArgoCD NodePort
+      shell: kubectl get svc argocd-server -n argocd -o jsonpath='{.spec.ports[1].nodePort}'
+      register: nodeport
+
+    - name: Print ArgoCD Access URL
+      debug:
+        msg: "ArgoCD URL: https://{{ inventory_hostname }}:{{ nodeport.stdout }}"
