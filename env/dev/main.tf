@@ -23,7 +23,7 @@ resource "aws_security_group" "sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["103.55.61.90/32"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Kubernetes API (Master)
@@ -49,7 +49,7 @@ resource "aws_security_group" "sg" {
     from_port   = 30000
     to_port     = 32767
     protocol    = "tcp"
-    cidr_blocks = ["103.55.61.90/32"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
