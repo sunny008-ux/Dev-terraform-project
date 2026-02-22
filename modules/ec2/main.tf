@@ -14,7 +14,7 @@ resource "aws_instance" "ec2" {
   ) : null
 
   root_block_device {
-    volume_size = 20      # GB
+    volume_size = 20 # GB
     volume_type = "gp3"
     encrypted   = true
   }

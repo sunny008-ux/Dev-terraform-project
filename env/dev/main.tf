@@ -45,11 +45,11 @@ resource "aws_security_group" "sg" {
   }
 
   ingress {
-  description = "Allow NodePort range"
-  from_port   = 30000
-  to_port     = 32767
-  protocol    = "tcp"
-  cidr_blocks = ["103.55.61.90/32"]
+    description = "Allow NodePort range"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = ["103.55.61.90/32"]
   }
 
   egress {
@@ -70,7 +70,7 @@ module "ec2_instance_1" {
   ami       = "ami-0b6c6ebed2801a5cb"
   subnet_id = module.vpc.public_subnet_id
   vpc_id    = module.vpc.vpc_id
-  sg_id   = aws_security_group.sg.id
+  sg_id     = aws_security_group.sg.id
 
   user_data_file = "../../modules/ec2/scripts/install.sh"
 }
@@ -85,7 +85,7 @@ module "ec2_instance_2" {
   ami       = "ami-0b6c6ebed2801a5cb"
   subnet_id = module.vpc.public_subnet_id
   vpc_id    = module.vpc.vpc_id
-  sg_id   = aws_security_group.sg.id
+  sg_id     = aws_security_group.sg.id
 
   user_data_file = "../../modules/ec2/scripts/worker.sh.tpl"
 }
@@ -100,7 +100,7 @@ module "ec2_instance_3" {
   ami       = "ami-0b6c6ebed2801a5cb"
   subnet_id = module.vpc.public_subnet_id
   vpc_id    = module.vpc.vpc_id
-  sg_id   = aws_security_group.sg.id
+  sg_id     = aws_security_group.sg.id
 
   user_data_file = "../../modules/ec2/scripts/worker.sh.tpl"
 }
