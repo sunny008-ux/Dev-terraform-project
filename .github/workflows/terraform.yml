@@ -11,6 +11,7 @@ on:
         options:
           - plan
           - apply
+          - destroy
 
 jobs:
   terraform:
@@ -48,3 +49,7 @@ jobs:
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         run: terraform apply -auto-approve
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'destroy'
+        run: terraform destroy -auto-approve
