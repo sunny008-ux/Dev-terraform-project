@@ -58,12 +58,21 @@ jobs:
         run: terraform apply -auto-approve
 
       # -------------------------------
-      # Get Master Public IP
+      # Get Master Public IP (Safe Version)
       # -------------------------------
       - name: Get Master Public IP
         if: github.event.inputs.action == 'apply'
+        id: get_ip
         run: |
-          echo "MASTER_IP=$(terraform output -raw master_public_ip)" >> $GITHUB_ENV
+          MASTER_IP=$(terraform output -raw master_public_ip 2>/dev/null)
+
+          if [ -z "$MASTER_IP" ]; then
+            echo "ERROR: master_public_ip output is empty."
+            exit 1
+          fi
+
+          echo "MASTER_IP=$MASTER_IP" >> $GITHUB_ENV
+          echo "Master IP: $MASTER_IP"
 
       # -------------------------------
       # Install Ansible
@@ -85,6 +94,23 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
 
       # -------------------------------
+      # Wait for SSH to be Ready
+      # -------------------------------
+      - name: Wait for SSH
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "Waiting for SSH on $MASTER_IP..."
+
+          for i in {1..20}; do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$MASTER_IP "echo ready"; then
+              echo "SSH is ready!"
+              break
+            fi
+            echo "Still waiting..."
+            sleep 15
+          done
+
+      # -------------------------------
       # Create Dynamic Inventory
       # -------------------------------
       - name: Create Inventory
@@ -92,17 +118,6 @@ jobs:
         run: |
           echo "[k8s_master]" > inventory.ini
           echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
-
-      # -------------------------------
-      # Wait For SSH
-      # -------------------------------
-      - name: Wait for SSH
-        if: github.event.inputs.action == 'apply'
-        run: |
-          for i in {1..20}; do
-            ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "echo ready" && break
-            sleep 15
-          done
 
       # -------------------------------
       # Run Ansible Playbook
