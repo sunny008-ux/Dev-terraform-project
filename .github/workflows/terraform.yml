@@ -1,21 +1,19 @@
-name: Terraform Manual Deployment
+name: Full K8s + ArgoCD Deployment
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Choose Terraform Action"
+        description: "Choose action"
         required: true
-        default: "plan"
+        default: "apply"
         type: choice
         options:
-          - plan
           - apply
           - destroy
 
 jobs:
-  terraform:
-    name: Terraform Job
+  deploy:
     runs-on: ubuntu-latest
 
     defaults:
@@ -23,12 +21,22 @@ jobs:
         working-directory: env/dev
 
     steps:
+
+      # -------------------------------
+      # Checkout Code
+      # -------------------------------
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # -------------------------------
+      # Setup Terraform
+      # -------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # -------------------------------
+      # Configure AWS Credentials
+      # -------------------------------
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -36,20 +44,76 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      # -------------------------------
+      # Terraform Init
+      # -------------------------------
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Plan
-        if: github.event.inputs.action == 'plan'
-        run: terraform plan
-
+      # -------------------------------
+      # Terraform Apply
+      # -------------------------------
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         run: terraform apply -auto-approve
 
-      - name: Terraform Apply
+      # -------------------------------
+      # Get Master Public IP
+      # -------------------------------
+      - name: Get Master Public IP
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "MASTER_IP=$(terraform output -raw master_public_ip)" >> $GITHUB_ENV
+
+      # -------------------------------
+      # Install Ansible
+      # -------------------------------
+      - name: Install Ansible
+        if: github.event.inputs.action == 'apply'
+        run: |
+          sudo apt update
+          sudo apt install -y ansible
+
+      # -------------------------------
+      # Setup SSH Key
+      # -------------------------------
+      - name: Setup SSH Key
+        if: github.event.inputs.action == 'apply'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # -------------------------------
+      # Create Dynamic Inventory
+      # -------------------------------
+      - name: Create Inventory
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "[k8s_master]" > inventory.ini
+          echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
+
+      # -------------------------------
+      # Wait For SSH
+      # -------------------------------
+      - name: Wait for SSH
+        if: github.event.inputs.action == 'apply'
+        run: |
+          for i in {1..20}; do
+            ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "echo ready" && break
+            sleep 15
+          done
+
+      # -------------------------------
+      # Run Ansible Playbook
+      # -------------------------------
+      - name: Install ArgoCD via Ansible
+        if: github.event.inputs.action == 'apply'
+        run: ansible-playbook -i inventory.ini ../../Ansible/install-argocd.yml
+
+      # -------------------------------
+      # Terraform Destroy
+      # -------------------------------
+      - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
         run: terraform destroy -auto-approve
