@@ -39,11 +39,11 @@ systemctl enable containerd
 apt-get install -y apt-transport-https ca-certificates curl gpg
 mkdir -p /etc/apt/keyrings
 
-curl -fsSL https://pkgs.k8s.io/core:/stable:/${K8S_VERSION}/deb/Release.key \
+curl -fsSL https://pkgs.k8s.io/core:/stable:/$K8S_VERSION/deb/Release.key \
   | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
-https://pkgs.k8s.io/core:/stable:/${K8S_VERSION}/deb/ /" \
+https://pkgs.k8s.io/core:/stable:/$K8S_VERSION/deb/ /" \
   > /etc/apt/sources.list.d/kubernetes.list
 
 apt-get update -y
