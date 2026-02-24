@@ -3,6 +3,9 @@
   hosts: k8s_master
   become: false
 
+  vars:
+    kubeconfig_path: /home/ubuntu/.kube/config
+
   tasks:
 
     - name: Install Helm
@@ -15,16 +18,21 @@
       shell: |
         helm repo add argo https://argoproj.github.io/argo-helm
         helm repo update
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
 
     - name: Create argocd namespace
-      shell: kubectl create namespace argocd
-      ignore_errors: yes
+      shell: kubectl create namespace argocd || true
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
 
     - name: Install ArgoCD via Helm
       shell: |
         helm upgrade --install argocd argo/argo-cd \
           --namespace argocd \
           --set server.service.type=NodePort
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
 
     - name: Wait for ArgoCD server
       shell: kubectl rollout status deployment argocd-server -n argocd
@@ -32,10 +40,14 @@
       retries: 10
       delay: 30
       until: rollout_status.rc == 0
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
 
     - name: Get ArgoCD NodePort
       shell: kubectl get svc argocd-server -n argocd -o jsonpath='{.spec.ports[1].nodePort}'
       register: nodeport
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
 
     - name: Print ArgoCD Access URL
       debug:
