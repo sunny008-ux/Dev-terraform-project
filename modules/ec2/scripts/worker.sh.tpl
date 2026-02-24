@@ -7,9 +7,6 @@ echo " containerd + kubeadm + Auto Join"
 echo "============================================="
 
 K8S_VERSION="v1.30"
-
-# Get master private IP dynamically from metadata (if needed later)
-# For now we pass it via Terraform templatefile
 MASTER_PRIVATE_IP="${master_ip}"
 
 echo "[INFO] Master Private IP: $MASTER_PRIVATE_IP"
@@ -42,8 +39,7 @@ mkdir -p /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/$K8S_VERSION/deb/Release.key \
   | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
-https://pkgs.k8s.io/core:/stable:/$K8S_VERSION/deb/ /" \
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$K8S_VERSION/deb/ /" \
   > /etc/apt/sources.list.d/kubernetes.list
 
 apt-get update -y
@@ -64,19 +60,32 @@ EOF
 sysctl --system
 
 # -------------------------------
-# Wait for Master to be Ready
+# Wait for Master Join Script
 # -------------------------------
-echo "[INFO] Waiting for master to generate join command..."
-sleep 90
+echo "[INFO] Waiting for master join script..."
+
+for i in {1..30}; do
+  if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$MASTER_PRIVATE_IP "test -f /home/ubuntu/join.sh"; then
+    echo "[INFO] Join script found."
+    break
+  fi
+  echo "[INFO] Join script not ready yet... retrying"
+  sleep 20
+done
 
 # -------------------------------
-# Fetch Join Script from Master
+# Fetch Join Script
 # -------------------------------
-ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_PRIVATE_IP "cat /home/ubuntu/join.sh" > /tmp/join.sh
+echo "[INFO] Fetching join script..."
+
+scp -o StrictHostKeyChecking=no ubuntu@$MASTER_PRIVATE_IP:/home/ubuntu/join.sh /tmp/join.sh
 
 chmod +x /tmp/join.sh
 
-echo "[INFO] Joining cluster..."
+# -------------------------------
+# Join Cluster
+# -------------------------------
+echo "[INFO] Joining Kubernetes cluster..."
 bash /tmp/join.sh
 
 echo "============================================="
