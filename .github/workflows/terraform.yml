@@ -52,14 +52,21 @@ jobs:
         if: github.event.inputs.action == 'apply'
         run: |
           MASTER_IP=$(terraform output -raw master_public_ip)
-
-          if [ -z "$MASTER_IP" ]; then
-            echo "Terraform output master_public_ip is empty"
-            exit 1
-          fi
-
           echo "MASTER_IP=$MASTER_IP" >> $GITHUB_ENV
-          echo "Master node IP: $MASTER_IP"
+          echo "Master IP: $MASTER_IP"
+
+      # Get Worker IPs
+      - name: Get Worker IPs
+        if: github.event.inputs.action == 'apply'
+        run: |
+          WORKER1=$(terraform output -raw worker1_public_ip)
+          WORKER2=$(terraform output -raw worker2_public_ip)
+
+          echo "WORKER1=$WORKER1" >> $GITHUB_ENV
+          echo "WORKER2=$WORKER2" >> $GITHUB_ENV
+
+          echo "Worker1 IP: $WORKER1"
+          echo "Worker2 IP: $WORKER2"
 
       # Install Ansible
       - name: Install Ansible
@@ -84,39 +91,61 @@ jobs:
 
           for i in {1..30}; do
             if ssh -o StrictHostKeyChecking=no \
-                   -o ServerAliveInterval=30 \
-                   -o ServerAliveCountMax=10 \
                    -o ConnectTimeout=5 \
                    ubuntu@$MASTER_IP "echo SSH Ready"; then
-              echo "SSH connection successful"
+              echo "SSH Ready"
               break
             fi
-
-            echo "SSH not ready yet... retrying"
             sleep 15
           done
 
-      # Wait for Kubernetes cluster to stabilize
-      - name: Wait for Kubernetes cluster
+      # Wait for Kubernetes init
+      - name: Wait for Kubernetes init
         if: github.event.inputs.action == 'apply'
         run: |
-          echo "Waiting for Kubernetes components to start..."
-          sleep 180
+          echo "Waiting for kubeadm init..."
+          sleep 120
+
+      # Get kubeadm join command
+      - name: Get Join Command
+        if: github.event.inputs.action == 'apply'
+        run: |
+          JOIN_CMD=$(ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo kubeadm token create --print-join-command")
+          echo "JOIN_CMD=$JOIN_CMD" >> $GITHUB_ENV
+          echo "Join command retrieved"
+
+      # Join Worker 1
+      - name: Join Worker 1
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "Joining worker1"
+          ssh -o StrictHostKeyChecking=no ubuntu@$WORKER1 "sudo $JOIN_CMD"
+
+      # Join Worker 2
+      - name: Join Worker 2
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "Joining worker2"
+          ssh -o StrictHostKeyChecking=no ubuntu@$WORKER2 "sudo $JOIN_CMD"
+
+      # Wait for cluster stabilization
+      - name: Wait for cluster stabilization
+        if: github.event.inputs.action == 'apply'
+        run: sleep 60
 
       # Create Ansible inventory
       - name: Create Inventory
         if: github.event.inputs.action == 'apply'
         run: |
           echo "[k8s_master]" > inventory.ini
-          echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10'" >> inventory.ini
+          echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
 
-      # Run Ansible Playbook
+      # Install ArgoCD via Ansible
       - name: Install ArgoCD via Ansible
         if: github.event.inputs.action == 'apply'
         run: |
           ANSIBLE_HOST_KEY_CHECKING=False \
-          ansible-playbook -vv \
-          -i inventory.ini ../../Ansible/install-argocd.yml
+          ansible-playbook -i inventory.ini ../../Ansible/install-argocd.yml
 
       # Terraform Destroy
       - name: Terraform Destroy
