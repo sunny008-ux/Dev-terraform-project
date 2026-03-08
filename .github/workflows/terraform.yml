@@ -63,15 +63,15 @@ jobs:
       - name: Get Master Public IP
         if: github.event.inputs.action == 'apply'
         run: |
-          MASTER_IP=$(terraform output -raw master_public_ip 2>/dev/null)
+          MASTER_IP=$(terraform output -raw master_public_ip)
 
           if [ -z "$MASTER_IP" ]; then
-            echo "ERROR: master_public_ip output is empty."
+            echo "Terraform output master_public_ip is empty"
             exit 1
           fi
 
           echo "MASTER_IP=$MASTER_IP" >> $GITHUB_ENV
-          echo "Master IP: $MASTER_IP"
+          echo "Master node IP: $MASTER_IP"
 
       # -------------------------------
       # Install Ansible
@@ -79,8 +79,8 @@ jobs:
       - name: Install Ansible
         if: github.event.inputs.action == 'apply'
         run: |
-          sudo apt update
-          sudo apt install -y ansible
+          sudo apt-get update
+          sudo apt-get install -y ansible
 
       # -------------------------------
       # Setup SSH Key
@@ -100,19 +100,31 @@ jobs:
         run: |
           echo "Waiting for SSH on $MASTER_IP..."
 
-          for i in {1..20}; do
+          for i in {1..30}; do
             if ssh -o StrictHostKeyChecking=no \
                    -o ServerAliveInterval=30 \
                    -o ServerAliveCountMax=10 \
                    -o ConnectTimeout=5 \
-                   ubuntu@$MASTER_IP "echo ready"; then
-              echo "SSH is ready!"
-              break
+                   ubuntu@$MASTER_IP "echo SSH Ready"; then
+              echo "SSH connection successful"
+              exit 0
             fi
 
-            echo "Still waiting..."
+            echo "SSH not ready yet... retrying"
             sleep 15
           done
+
+          echo "SSH never became ready"
+          exit 1
+
+      # -------------------------------
+      # Give Kubernetes time to stabilize
+      # -------------------------------
+      - name: Wait for Kubernetes to stabilize
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "Waiting for Kubernetes control plane components..."
+          sleep 120
 
       # -------------------------------
       # Create Dynamic Inventory
@@ -130,9 +142,7 @@ jobs:
         if: github.event.inputs.action == 'apply'
         run: |
           ANSIBLE_HOST_KEY_CHECKING=False \
-          ansible-playbook -vvv \
-          -i inventory.ini \
-          ../../Ansible/install-argocd.yml
+          ansible-playbook -i inventory.ini ../../Ansible/install-argocd.yml
 
       # -------------------------------
       # Terraform Destroy
