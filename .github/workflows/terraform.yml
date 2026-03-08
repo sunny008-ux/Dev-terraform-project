@@ -22,21 +22,15 @@ jobs:
 
     steps:
 
-      # -------------------------------
-      # Checkout Repository
-      # -------------------------------
+      # Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # -------------------------------
       # Setup Terraform
-      # -------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # -------------------------------
       # Configure AWS Credentials
-      # -------------------------------
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -44,22 +38,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      # -------------------------------
       # Terraform Init
-      # -------------------------------
       - name: Terraform Init
         run: terraform init
 
-      # -------------------------------
       # Terraform Apply
-      # -------------------------------
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         run: terraform apply -auto-approve
 
-      # -------------------------------
       # Get Master Public IP
-      # -------------------------------
       - name: Get Master Public IP
         if: github.event.inputs.action == 'apply'
         run: |
@@ -73,18 +61,14 @@ jobs:
           echo "MASTER_IP=$MASTER_IP" >> $GITHUB_ENV
           echo "Master node IP: $MASTER_IP"
 
-      # -------------------------------
       # Install Ansible
-      # -------------------------------
       - name: Install Ansible
         if: github.event.inputs.action == 'apply'
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible
 
-      # -------------------------------
       # Setup SSH Key
-      # -------------------------------
       - name: Setup SSH Key
         if: github.event.inputs.action == 'apply'
         run: |
@@ -92,9 +76,7 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # -------------------------------
-      # Wait for SSH
-      # -------------------------------
+      # Wait for SSH availability
       - name: Wait for SSH
         if: github.event.inputs.action == 'apply'
         run: |
@@ -107,46 +89,36 @@ jobs:
                    -o ConnectTimeout=5 \
                    ubuntu@$MASTER_IP "echo SSH Ready"; then
               echo "SSH connection successful"
-              exit 0
+              break
             fi
 
             echo "SSH not ready yet... retrying"
             sleep 15
           done
 
-          echo "SSH never became ready"
-          exit 1
-
-      # -------------------------------
-      # Give Kubernetes time to stabilize
-      # -------------------------------
-      - name: Wait for Kubernetes to stabilize
+      # Wait for Kubernetes cluster to stabilize
+      - name: Wait for Kubernetes cluster
         if: github.event.inputs.action == 'apply'
         run: |
-          echo "Waiting for Kubernetes control plane components..."
-          sleep 120
+          echo "Waiting for Kubernetes components to start..."
+          sleep 180
 
-      # -------------------------------
-      # Create Dynamic Inventory
-      # -------------------------------
+      # Create Ansible inventory
       - name: Create Inventory
         if: github.event.inputs.action == 'apply'
         run: |
           echo "[k8s_master]" > inventory.ini
           echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10'" >> inventory.ini
 
-      # -------------------------------
       # Run Ansible Playbook
-      # -------------------------------
       - name: Install ArgoCD via Ansible
         if: github.event.inputs.action == 'apply'
         run: |
           ANSIBLE_HOST_KEY_CHECKING=False \
-          ansible-playbook -i inventory.ini ../../Ansible/install-argocd.yml
+          ansible-playbook -vv \
+          -i inventory.ini ../../Ansible/install-argocd.yml
 
-      # -------------------------------
       # Terraform Destroy
-      # -------------------------------
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
         run: terraform destroy -auto-approve
