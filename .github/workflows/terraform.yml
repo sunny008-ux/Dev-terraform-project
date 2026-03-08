@@ -23,7 +23,7 @@ jobs:
     steps:
 
       # -------------------------------
-      # Checkout Code
+      # Checkout Repository
       # -------------------------------
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -58,11 +58,10 @@ jobs:
         run: terraform apply -auto-approve
 
       # -------------------------------
-      # Get Master Public IP (Safe Version)
+      # Get Master Public IP
       # -------------------------------
       - name: Get Master Public IP
         if: github.event.inputs.action == 'apply'
-        id: get_ip
         run: |
           MASTER_IP=$(terraform output -raw master_public_ip 2>/dev/null)
 
@@ -94,7 +93,7 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
 
       # -------------------------------
-      # Wait for SSH to be Ready
+      # Wait for SSH
       # -------------------------------
       - name: Wait for SSH
         if: github.event.inputs.action == 'apply'
@@ -102,10 +101,15 @@ jobs:
           echo "Waiting for SSH on $MASTER_IP..."
 
           for i in {1..20}; do
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$MASTER_IP "echo ready"; then
+            if ssh -o StrictHostKeyChecking=no \
+                   -o ServerAliveInterval=30 \
+                   -o ServerAliveCountMax=10 \
+                   -o ConnectTimeout=5 \
+                   ubuntu@$MASTER_IP "echo ready"; then
               echo "SSH is ready!"
               break
             fi
+
             echo "Still waiting..."
             sleep 15
           done
@@ -117,14 +121,18 @@ jobs:
         if: github.event.inputs.action == 'apply'
         run: |
           echo "[k8s_master]" > inventory.ini
-          echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
+          echo "$MASTER_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10'" >> inventory.ini
 
       # -------------------------------
       # Run Ansible Playbook
       # -------------------------------
       - name: Install ArgoCD via Ansible
         if: github.event.inputs.action == 'apply'
-        run: ansible-playbook -i inventory.ini ../../Ansible/install-argocd.yml
+        run: |
+          ANSIBLE_HOST_KEY_CHECKING=False \
+          ansible-playbook -vvv \
+          -i inventory.ini \
+          ../../Ansible/install-argocd.yml
 
       # -------------------------------
       # Terraform Destroy
