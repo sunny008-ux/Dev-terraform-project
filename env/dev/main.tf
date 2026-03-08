@@ -88,6 +88,8 @@ module "ec2_instance_2" {
   sg_id     = aws_security_group.sg.id
 
   user_data_file = "../../modules/ec2/scripts/worker.sh.tpl"
+
+  master_ip = module.ec2_instance_1.private_ip
 }
 
 module "ec2_instance_3" {
@@ -103,5 +105,7 @@ module "ec2_instance_3" {
   sg_id     = aws_security_group.sg.id
 
   user_data_file = "../../modules/ec2/scripts/worker.sh.tpl"
+
+  master_ip = module.ec2_instance_1.private_ip
 }
 
